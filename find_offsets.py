@@ -264,8 +264,19 @@ def logpolar_fancy(image, i_0=None, j_0=None, p_n=None, t_n=None, crop=False):
     transformed[pt] = image[ij]
     return transformed
 
-def crop_center(img,cropx,cropy):
-    x,y = img.shape
+def crop_center(image, cropx, cropy):
+
+    """Crop a centered rectangle of size cropx and cropy from an image.
+    
+    Parameters
+    ----------
+    image : np.ndarray
+      2-dimensional array with image data to crop.
+    cropx, cropy : int
+      Size in pixels of the rectangle to crop.
+    
+    """
+    x,y = imamge.shape
     startx = x//2 - cropx//2
     starty = y//2 - cropy//2    
     return img[startx:startx+cropx, starty:starty+cropy]
