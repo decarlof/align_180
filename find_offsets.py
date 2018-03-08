@@ -15,6 +15,7 @@ from skimage.filters import threshold_li
 from skimage.io import imread
 from skimage.feature import register_translation
 from skimage.transform import AffineTransform, warp, FundamentalMatrixTransform
+from scipy.ndimage import fourier_shift
 import numpy as np
 import tqdm
 
@@ -26,6 +27,53 @@ __version__ = "0.0.1"
 __all__ = ['alignment_pass',
            'transform_image',
            'image_corrections']
+
+
+def realign_image(arr, shift, angle=0):
+    """
+    Translate and rotate image via Fourier
+
+    Parameters
+    ----------
+    arr : ndarray
+        Image array.
+
+    shift: float
+        Mininum and maximum values to rescale data.
+
+    angle: float, optional
+        Mininum and maximum values to rescale data.
+
+    Returns
+    -------
+    ndarray
+        Output array.
+    """
+    # if both shifts are integers, do circular shift; otherwise perform Fourier shift.
+    if np.count_nonzero(np.abs(np.array(shift) - np.round(shift)) < 0.01) == 2:
+        temp = np.roll(arr, int(shift[0]), axis=0)
+        temp = np.roll(temp, int(shift[1]), axis=1)
+        temp = temp.astype('float32')
+    else:
+        temp = fourier_shift(np.fft.fftn(arr), shift)
+        temp = np.fft.ifftn(temp)
+        temp = np.abs(temp).astype('float32')
+    return temp
+
+
+def my_register_translation(src_image, target_image, upsample_factor=1,
+                            space="real", down=0):
+    shifts = register_translation(src_image, target_image, upsample_factor=upsample_factor,
+                                  space=space)[0]
+    shape = src_image.shape
+    if not down:
+        if shifts[1] < 0:
+            shifts[1] += float(shape[1])
+    else:
+        if shifts[0] < 0:
+            shifts[0] += float(shape[0])
+    return shifts
+
 
 def flip(m, axis):
     if not hasattr(m, 'ndim'):
@@ -42,10 +90,12 @@ def flip(m, axis):
 def alignment_pass(img, img_180):
     upsample = 2
     # Register the translation correction
-    trans = register_translation(img, img_180, upsample_factor=upsample)
-    trans = trans[0]
+    trans = my_register_translation(img, img_180, upsample_factor=upsample)
+    # trans = trans[0]
     # Register the rotation correction
     lp_center = (int(img.shape[0] / 2), int(img.shape[1] / 2))
+    # Eliminate translational offset before finding tilt
+    img = realign_image(img, shift=-np.array(trans))
     img_lp = logpolar_fancy(img, *lp_center, crop=True)
     img_180_lp = logpolar_fancy(img_180, *lp_center, crop=True)
     result = register_translation(img_lp, img_180_lp, upsample_factor=upsample*10)
@@ -260,8 +310,9 @@ def logpolar_fancy(image, i_0=None, j_0=None, p_n=None, t_n=None, crop=False):
     t_s = 2.0 * np.pi / t_n
     
     (pt, ij) = _get_transform(i_0, j_0, i_n, j_n, p_n, t_n, p_s, t_s)
-    
-    transformed = np.zeros((p_n, t_n) + image.shape[2:], dtype=image.dtype)
+
+    # fill blank region with noise to prevent registration misguidance
+    transformed = np.random.normal(0.5, 0.2, (p_n, t_n) + image.shape[2:])
     
     transformed[pt] = image[ij]
     return transformed
