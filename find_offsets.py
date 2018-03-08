@@ -279,7 +279,7 @@ def crop_center(image, cropx, cropy):
     x,y = image.shape
     startx = x//2 - cropx//2
     starty = y//2 - cropy//2    
-    return img[startx:startx+cropx, starty:starty+cropy]
+    return image[startx:startx+cropx, starty:starty+cropy]
 
 def show_images(images, cols = 1, titles = None):
     """Display a list of images in a single figure with matplotlib.
