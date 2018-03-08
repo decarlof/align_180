@@ -9,6 +9,7 @@ import os
 import argparse
 import math
 
+from scipy.ndimage import rotate, shift
 from scipy.optimize import least_squares
 from skimage.filters import threshold_li
 from skimage.io import imread
@@ -17,7 +18,6 @@ from skimage.transform import AffineTransform, warp, FundamentalMatrixTransform
 import numpy as np
 import tqdm
 
-#import dxchange
 import matplotlib.pyplot as plt
 
 __authors__ = "Mark Wolfman"
@@ -120,7 +120,7 @@ def transform_image(img, rotation=0, translation=(0, 0), crop=False):
     return out, crops
 
 
-def image_corrections(img_name_0, img_name_180, passes=15, crop=False):
+def image_corrections(img_name_0, img_name_180, passes=15, crop=False, view=False):
     """Report translation, rotation alignment for two images.
     
     The second image is assumed to be the same object as the first
@@ -147,10 +147,10 @@ def image_corrections(img_name_0, img_name_180, passes=15, crop=False):
       pixels).
     
     """
-    img = imread(img_name_0)
+    img_0 = imread(img_name_0)
     img_180 = imread(img_name_180)
     # python 3.6
-    img = flip(img, 1)
+    img = flip(img_0, 1)
     cume_angle = 0
     cume_trans = np.array([0, 0], dtype=float)
     for pass_ in tqdm.tqdm(range(passes)):
@@ -171,6 +171,16 @@ def image_corrections(img_name_0, img_name_180, passes=15, crop=False):
         cume_trans += np.array(trans)
     # Convert translations to (x, y)
     cume_trans = (-cume_trans[1], cume_trans[0])
+    if view:
+        img_rot = rotate(img, cume_angle, mode='wrap')
+        img_shift = shift(img_rot, (cume_trans[1], cume_trans[0]), mode='wrap')
+        img_crop = crop_center(img_shift, img_0.shape[0], img_0.shape[1])
+        img_diff = img_crop-img_180
+
+        images = (img_0, img_180, img_crop, img_diff)
+        title = ('0 deg', '180 deg', '180 deg flip/correct', 'Difference')
+        show_images(images, titles=title, cols=2)
+
     return cume_angle, cume_trans
 
 
@@ -254,6 +264,38 @@ def logpolar_fancy(image, i_0=None, j_0=None, p_n=None, t_n=None, crop=False):
     transformed[pt] = image[ij]
     return transformed
 
+def crop_center(img,cropx,cropy):
+    x,y = img.shape
+    startx = x//2 - cropx//2
+    starty = y//2 - cropy//2    
+    return img[startx:startx+cropx, starty:starty+cropy]
+
+def show_images(images, cols = 1, titles = None):
+    """Display a list of images in a single figure with matplotlib.
+    
+    Parameters
+    ---------
+    images: List of np.arrays compatible with plt.imshow.
+    
+    cols (Default = 1): Number of columns in figure (number of rows is 
+                        set to np.ceil(n_images/float(cols))).
+    
+    titles: List of titles corresponding to each image. Must have
+            the same length as titles.
+    """
+    assert((titles is None)or (len(images) == len(titles)))
+    n_images = len(images)
+    if titles is None: titles = ['Image (%d)' % i for i in range(1,n_images + 1)]
+    fig = plt.figure()
+    for n, (image, title) in enumerate(zip(images, titles)):
+        a = fig.add_subplot(cols, np.ceil(n_images/float(cols)), n + 1)
+        if image.ndim == 2:
+            plt.gray()
+        plt.imshow(image)
+        a.set_title(title)
+    fig.set_size_inches(np.array(fig.get_size_inches()) * n_images)
+    plt.show()
+
 
 if __name__ == '__main__':
     # Prepare arguments
@@ -265,8 +307,11 @@ if __name__ == '__main__':
     parser.add_argument('--passes', '-p',
                         help='How many iterations to run.',
                         default=15, type=int)
+    parser.add_argument("--show", default=False, action="store_true" , 
+                        help="Flag to show images.")
     parser.add_argument('-d', '--debug', action='store_true',
                         help="Show detailed logging and disable threading.")
+
     args = parser.parse_args()
     # Setup logging
     if args.debug:
@@ -276,7 +321,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=loglevel)    
     # Perform the correction calculation
     rot, trans = image_corrections(args.original_image, args.flipped_image,
-                                   passes=args.passes)
+                                   passes=args.passes, view=args.show)
     # Display the result
     # python 3.6
     print("DR: {:.2f}°, DX: {:.2f} px, DY: {:.2f} px"
