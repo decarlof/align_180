@@ -276,7 +276,7 @@ def crop_center(image, cropx, cropy):
       Size in pixels of the rectangle to crop.
     
     """
-    x,y = imamge.shape
+    x,y = image.shape
     startx = x//2 - cropx//2
     starty = y//2 - cropy//2    
     return img[startx:startx+cropx, starty:starty+cropy]
