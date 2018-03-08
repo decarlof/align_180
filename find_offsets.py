@@ -175,10 +175,12 @@ def image_corrections(img_name_0, img_name_180, passes=15, crop=False, view=Fals
         img_rot = rotate(img, cume_angle, mode='wrap')
         img_shift = shift(img_rot, (cume_trans[1], cume_trans[0]), mode='wrap')
         img_crop = crop_center(img_shift, img_0.shape[0], img_0.shape[1])
-        img_diff = img_crop-img_180
+        img_diff = img_crop.astype(np.float32)-img_180.astype(np.float32)
 
-        images = (img_0, img_180, img_crop, img_diff)
-        title = ('0 deg', '180 deg', '180 deg flip/correct', 'Difference')
+        images = (img_0, img_180, flip(img_crop, 1), flip(img_diff, 1))
+        print("type: ", img_diff[100,100])
+
+        title = ('0 deg', '180 deg', '180 deg flip + shift/rotation corrected', 'Difference (180 deg flip - 0 deg)')
         show_images(images, titles=title, cols=2)
 
     return cume_angle, cume_trans
